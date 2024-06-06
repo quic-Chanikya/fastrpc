@@ -150,6 +150,7 @@ AEEResult dspsignal_create(int domain, uint32_t id, uint32_t flags) {
       nErr = AEE_EITEMBUSY;
       goto bail;
     } else {
+		FARF(ALWAYS, "cgettibo general error\n");
       nErr = AEE_EFAILED;
       goto bail;
     }

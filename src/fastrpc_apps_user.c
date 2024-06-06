@@ -369,6 +369,7 @@ int fastrpc_session_get(int domain) {
       pthread_mutex_lock(&hlist[domain].mut);
       if (hlist[domain].state == FASTRPC_DOMAIN_STATE_DEINIT) {
         pthread_mutex_unlock(&hlist[domain].mut);
+		FARF(ALWAYS, "cgettibo err1\n");
         return AEE_ENOTINITIALIZED;
       }
       hlist[domain].ref++;
@@ -378,6 +379,7 @@ int fastrpc_session_get(int domain) {
       FARF(RUNTIME_RPC_HIGH, "%s, domain %d, state %d, ref %d\n", __func__, domain,
            hlist[domain].state, ref);
     } else {
+		FARF(ALWAYS, "cgettibo err2\n");
       return AEE_ENOTINITIALIZED;
     }
   } while (0);
@@ -790,7 +792,7 @@ static const char *get_domain_from_id(int domain_id) {
 
 #define IS_CONST_HANDLE(h) (((h) < 0xff) ? 1 : 0)
 
-static int is_last_handle(int domain) {
+static bool is_last_handle(int domain) {
   int nErr = AEE_SUCCESS, last = 0;
 
   VERIFYC((domain >= 0) && (domain < NUM_DOMAINS_EXTEND), AEE_EBADPARM);
@@ -802,7 +804,7 @@ bail:
     VERIFY_IPRINTF("Error 0x%x: %s failed for domain %d\n", nErr, __func__,
                    domain);
   }
-  return last;
+  return (last==0);
 }
 
 static int get_handle_remote(remote_handle64 local, remote_handle64 *remote) {
@@ -1835,9 +1837,12 @@ int remote_handle64_close(remote_handle64 handle) {
   fastrpc_update_module_list(DOMAIN_LIST_DEQUEUE, domain, handle, NULL);
   FASTRPC_PUT_REF(domain);
 bail:
-  if (nErr != AEE_EINVHANDLE) {
-    if (is_valid_local_handle(domain, (struct handle_info *)handle) && is_last_handle(domain)) {
-      domain_deinit(domain);
+  if (nErr != AEE_EINVHANDLE && is_domain_valid(domain)) {
+    if (is_valid_local_handle(domain, (struct handle_info *)handle)) {
+      if (is_last_handle(domain)) {
+        hlist[domain].disable_exit_logs = 1;
+        domain_deinit(domain);
+      }
     } else {
       nErr = AEE_ERPC;
     }
@@ -3309,37 +3314,6 @@ static void get_process_testsig(apps_std_FILE *fp, uint64 *ptrlen) {
   return;
 }
 
-int is_kernel_alloc_supported(int dev, int domain) {
-  int nErr = 0;
-
-  if (!is_domain_valid(domain))
-    return 0;
-
-  if (hlist && !hlist[domain].kmem_support) {
-    struct fastrpc_ctrl_kalloc kalloc = {0};
-
-    kalloc.kalloc_support = -ENOTTY;
-    nErr = ioctl_control(dev, DSPRPC_KALLOC_SUPPORT, &kalloc);
-    if (!nErr) {
-      if (kalloc.kalloc_support != 1 &&
-          (((int32_t)kalloc.kalloc_support != -ENOTTY) ||
-           ((int32_t)kalloc.kalloc_support != -ENXIO) ||
-           ((int32_t)kalloc.kalloc_support != -EINVAL))) {
-        nErr = AEE_ERPC;
-        FARF(ERROR,
-             "Error 0x%x: IOCTL control for kernel alloc support failed with "
-             "%d for domain %d errno %s",
-             nErr, kalloc.kalloc_support, domain, strerror(errno));
-        return 0;
-      }
-      hlist[domain].kmem_support = kalloc.kalloc_support;
-    }
-  }
-  nErr = ((hlist[domain].kmem_support == 1) ? hlist[domain].kmem_support : 0);
-
-  return nErr;
-}
-
 static int open_shell(int domain_id, apps_std_FILE *fh, int unsigned_shell) {
   char *absName = NULL;
   char *shell_absName = NULL;
@@ -3693,20 +3667,6 @@ static int remote_init(int domain) {
         siglen = 0;
         fsig = -1;
       }
-      if (!is_kernel_alloc_supported(dev, domain)) {
-        FARF(RUNTIME_RPC_HIGH,
-             "Allocating DSP donated memory in userspace for domain %d",
-             domain);
-        memlen =
-            ALIGN_B(STD_MAX(DEFAULT_PD_INITMEM_SIZE, (int)len * 4), one_mb);
-        if (hlist[domain].pd_initmem_size > (uint32_t)memlen)
-          memlen = ALIGN_B(hlist[domain].pd_initmem_size, one_mb);
-        mem = rpcmem_alloc_internal(
-            0, RPCMEM_HEAP_DEFAULT | RPCMEM_HEAP_UNCACHED, (size_t)memlen);
-        VERIFYC(mem, AEE_ENORPCMEMORY);
-        memfd = rpcmem_to_fd_internal(mem);
-        VERIFYC(memfd != -1, AEE_ERPC);
-      }
 
       if (!(FASTRPC_MODE_UNSIGNED_MODULE & hlist[domain].procattrs)) {
         memlen = hlist[domain].pd_initmem_size;
@@ -4016,7 +3976,7 @@ static void fastrpc_apps_user_deinit(void) {
     pthread_key_delete(tlsKey);
     tlsKey = INVALID_KEY;
   }
-  fastrpc_notif_deinit();
+  fastrpc_clear_handle_list(NON_DOMAIN_HANDLE_LIST_ID, DEFAULT_DOMAIN_ID);
   if (hlist) {
     for (i = 0; i < NUM_DOMAINS_EXTEND; i++) {
       fastrpc_clear_handle_list(MULTI_DOMAIN_HANDLE_LIST_ID, i);
@@ -4031,7 +3991,7 @@ static void fastrpc_apps_user_deinit(void) {
     free(hlist);
     hlist = NULL;
   }
-  fastrpc_clear_handle_list(NON_DOMAIN_HANDLE_LIST_ID, DEFAULT_DOMAIN_ID);
+  
 #ifndef NO_HAL
   for (i = 0; i < NUM_SESSIONS; i++) {
     destroy_dsp_client_instance(dsp_client_instance[i]);
@@ -4040,7 +4000,7 @@ static void fastrpc_apps_user_deinit(void) {
   pthread_mutex_destroy(&dsp_client_mut);
 #endif
   deinit_process_signals();
-  fastrpc_cleanup_notif_list();
+  fastrpc_notif_deinit();
   fastrpc_wake_lock_deinit();
   fastrpc_log_deinit();
   fastrpc_mem_deinit();
