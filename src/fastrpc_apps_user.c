@@ -3083,10 +3083,6 @@ static void domain_deinit(int domain) {
          __func__, olddev, domain, t_kill);
     FASTRPC_ATRACE_END();
   }
-  if (hlist[domain].pdmem) {
-    rpcmem_free_internal(hlist[domain].pdmem);
-    hlist[domain].pdmem = NULL;
-  }
   hlist[domain].proc_sharedbuf_cur_addr = NULL;
   if (hlist[domain].proc_sharedbuf) {
     rpcmem_free_internal(hlist[domain].proc_sharedbuf);
@@ -3514,8 +3510,8 @@ static int remote_init(int domain) {
   int pd_type = 0, errno_save = 0;
   uint32_t info = domain & DOMAIN_ID_MASK;
   int one_mb = 1024 * 1024, shared_buf_support = 0;
-  char *file = NULL, *mem = NULL;
-  int flags = 0, filelen = 0, memlen = 0, filefd = -1, memfd = -1;
+  char *file = NULL;
+  int flags = 0, filelen = 0, memlen = 0, filefd = -1;
 
   FARF(RUNTIME_RPC_HIGH, "starting %s for domain %d", __func__, domain);
   /*
@@ -3690,7 +3686,7 @@ static int remote_init(int domain) {
         }
       }
       ioErr = ioctl_init(dev, flags, hlist[domain].procattrs, (byte *)file,
-                         filelen, filefd, mem, memlen, memfd, siglen);
+                         filelen, filefd, NULL, memlen, -1, siglen);
       if (ioErr) {
         nErr = ioErr;
         if (errno == ECONNREFUSED) {
@@ -3709,17 +3705,12 @@ static int remote_init(int domain) {
     }
     hlist[domain].dev = dev;
     dev = -1;
-    hlist[domain].pdmem = mem;
     hlist[domain].disable_exit_logs = 0;
   }
 bail:
   // errno is being set to 0 in apps_std_fclose and we need original errno to
   // return proper error to user call
   errno_save = errno;
-  if (nErr && mem) {
-    rpcmem_free_internal(mem);
-    mem = NULL;
-  }
   if (file) {
     rpcmem_free_internal(file);
     file = NULL;

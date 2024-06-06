@@ -305,7 +305,6 @@ struct fastrpc_map {
   *    sessionname - Name of the session, if more than one process created on same DSP
   *    domainsupport - Legacy field, should be 1 always.
   *    kmem_support - Stores whether kernel can allocate memory for signed process
-  *    dev - file descriptor returned by open(<fastrpc_device_node>)
   *    pdmem - Memory to store DSP process configurations
   *    cphandle, msghandle, lsitenerhandle, remotectlhandle, adspperfhandle - static
   *            handles created for the stub files loaded by fastRPC.
@@ -336,7 +335,6 @@ struct handle_list {
 	int setmode;
 	uint32_t mode;
 	uint32_t info;
-	void* pdmem;
 	remote_handle64 cphandle;
 	remote_handle64 msghandle;
 	remote_handle64 listenerhandle;
