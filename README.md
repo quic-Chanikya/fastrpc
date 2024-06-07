@@ -95,6 +95,10 @@ sudo make install
 
 Use Hexagon SDK examples to verify. for eg: run calculator_walkthrough.py for validating the basic functionality of fastRPC.
 
+## Status of examples
+
+
+
 ## Resources
 
 Hexagon SDK documentation @ https://developer.qualcomm.com/software/hexagon-dsp-sdk.
