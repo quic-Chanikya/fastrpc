@@ -97,7 +97,26 @@ Use Hexagon SDK examples to verify. for eg: run calculator_walkthrough.py for va
 
 ## Status of examples
 
-
+| Example | Signed | Unsigned |
+| ------- | ------ | -------  |
+| benchmark | NO(dependency missing) | NO(dependency missing) | 
+| compute_res_mgr_sample | YES | YES |
+| image_dspq | NO(dependency missing) | NO(dependency missing) | 
+| ubwcdma | YES | Not supported | 
+| userdma_example | YES | YES |
+| android_app | Not supported | YES |
+| calculator | YES | YES |
+| calculator_c++ | YES | YES |
+| dspqueue | NO(dependency missing) | NO(dependency missing) |
+| gtest | YES | YES |
+| Hap_example | YES | YES |
+| itrace | YES | YES |
+| multithreading | YES | YES |
+| oemconfig | YES | YES |
+| profiling | YES | YES |
+| qhl | YES | YES |
+| qhl-hvx | YES | YES |
+| qprintf_example | YES | YES |
 
 ## Resources
 
